@@ -7,7 +7,7 @@ def get_bitboards_and_other_stuff(fen):
         0b1000: "O-O",
         0b0100: "O-O-O",
         0b0010: "O-O",
-        0b0001: "OO-O"
+        0b0001: "O-O-O"
     }
 
     Enpassant_dict = {
@@ -19,14 +19,14 @@ def get_bitboards_and_other_stuff(fen):
         "f6": 21,
         "g6": 22,
         "h6": 23,
-        "a3": 48,
-        "b3": 49,
-        "c3": 50,
-        "d3": 51,
-        "e3": 52,
-        "f3": 53,
-        "g3": 54,
-        "h3": 55
+        "a3": 40,
+        "b3": 41,
+        "c3": 42,
+        "d3": 43,
+        "e3": 44,
+        "f3": 45,
+        "g3": 46,
+        "h3": 47
     }
 
     Piece_bitboard_dict = {
@@ -61,7 +61,7 @@ def get_bitboards_and_other_stuff(fen):
     for element in fen_elements[2]:
         castle_rights_bitboard = castle_rights_bitboard | Castle_dict[element]
 
-    # Initializing the board_info[1] int w=0, b=1
+    # Initializing the board_info[1] bool w=True, b=False
     if fen_elements[1] == "w":
         player = True
     else:
@@ -138,30 +138,70 @@ def pawn_moves(board_info):
     b_tot_bitboard = board_info[0][0] | board_info[0][1] | board_info[0][2] | board_info[0][3] | board_info[0][4] | board_info[0][5]
     w_tot_bitboard = board_info[0][6] | board_info[0][7] | board_info[0][8] | board_info[0][9] | board_info[0][10] | board_info[0][11]
     tot_bitboard = b_tot_bitboard|w_tot_bitboard
-    not_afile = 0b1111111011111110111111101111111011111110111111101111111011111110
-    not_hfile = 0b111111101111111011111110111111101111111011111110111111101111111
+    not_hfile = 0b1111111011111110111111101111111011111110111111101111111011111110
+    not_afile = 0b111111101111111011111110111111101111111011111110111111101111111
 
     #calculating the squares the pawns can move[1]to by pushing the pawns
-    board_info[6] = 0b1111111111111111111111111111111111111111111111111111111111111111
-    pawn_dp_bitmap = 0b1111111111111111111111111111111111111111111111111111111111111111
     if board_info[1] == True:
-        pawn_push_mask = board_info[0][6]<<8
-        pawn_double_push_mask = (0b1111111100000000 & board_info[0][6])<<8
-        pawn_dp_bitmap = pawn_double_push_mask & ~tot_bitboard & pawn_dp_bitmap
-        board_info[6] = (pawn_push_mask & ~tot_bitboard & board_info[6]) | pawn_dp_bitmap << 8 & ~tot_bitboard
+        pointer = 0b1 << 8
+        # pawn pushes white
+        pawn_push_mask = (board_info[0][6]) & ~(tot_bitboard>>8)
+        move_bit = (0b1 << 16) + (0b1 << 8)
+        for i in range(48):
+            if pawn_push_mask & (pointer<<i)!=0:
+                board_info[6].append(move_bit<<i)
 
-        capture_move_left = (board_info[0][6] << 9  & not_afile) & (b_tot_bitboard | board_info[3])
-        capture_move_right = (board_info[0][6] << 7 & not_hfile) & (b_tot_bitboard | board_info[3])
-        board_info[7] = capture_move_left | capture_move_right
+        pointer = 0b1 << 8
+        pawn_double_push_mask = (board_info[0][6]&0b1111111100000000) & ~(tot_bitboard>>16) & ~(tot_bitboard>>8)
+        move_bit = (0b1 << 24) + (0b1 << 8)
+        for i in range(8):
+            if pawn_double_push_mask & (pointer<<i)!=0:
+                board_info[6].append(move_bit<<i)
+
+
+        # pawn captures white
+        pointer = 0b1 << 8
+        capture_left_mask = board_info[0][6] & (((b_tot_bitboard|board_info[3])&not_hfile)>>9)
+        capture_right_mask = board_info[0][6] & (((b_tot_bitboard|board_info[3])&not_afile)>>7)
+        print(bin(capture_right_mask))
+        print(bin(capture_left_mask))
+        print(bin(board_info[3]), "enpassant")
+        move_bit_left = (0b1<<8) + (0b1<<17)
+        move_bit_right = (0b1<<8) + (0b1<<15)
+        for i in range(47):
+            if capture_left_mask & (pointer<<i)!=0:
+                board_info[6].append(move_bit_left<<i)
+            if capture_right_mask & (pointer<<i+1)!=0:
+                board_info[6].append(move_bit_right<<i+1)
+
     elif board_info[1] == False:
-        pawn_push_mask = board_info[0][0] >> 8
-        pawn_double_push_mask = (0b11111111000000000000000000000000000000000000000000000000 & board_info[0][0]) >> 8
-        pawn_dp_bitmap = pawn_double_push_mask & ~tot_bitboard & pawn_dp_bitmap
-        board_info[6] = (pawn_push_mask & ~tot_bitboard & board_info[6]) | pawn_dp_bitmap >> 8 & ~tot_bitboard
+        pointer = 0b1
+        # pawn push black
+        pawn_push_mask = (board_info[0][0]>>8) & ~tot_bitboard
+        move_bit =  (0b1<<8) + 0b1
+        for i in range(48):
+            if pawn_push_mask & (pointer<<i)!=0:
+                board_info[6].append(move_bit<<i)
 
-        capture_move_left = (board_info[0][0] >> 9 & not_afile) & (w_tot_bitboard | board_info[3])
-        capture_move_right = (board_info[0][0] >> 7 & not_hfile) & (w_tot_bitboard | board_info[3])
-        board_info[7] = capture_move_left | capture_move_right
+        pointer = 0b1
+        pawn_double_push_mask = (((board_info[0][0]>>48) & 0b11111111) & ~(tot_bitboard>>40)) & ~(tot_bitboard>>32)
+        move_bit = (0b1<<32) + (0b1<<48)
+        for i in range(8):
+            if pawn_double_push_mask & (pointer<<i)!=0:
+                board_info[6].append(move_bit<<i)
+
+        # pawn captures black
+        pointer = 0b1
+        capture_left_mask = ((board_info[0][0] & not_afile)>>7) & (w_tot_bitboard|board_info[3])
+        capture_right_mask = (board_info[0][0] & not_hfile) >> 9 & (w_tot_bitboard | board_info[3])
+        move_bit_left = 0b1 + (0b1 << 7)
+        move_bit_right = 0b1 + (0b1 << 9)
+        for i in range(47):
+            if capture_left_mask & (pointer<<i+1)!=0:
+                board_info[6].append(move_bit_left<<i+1)
+            if capture_right_mask & (pointer<<i)!=0:
+                board_info[6].append(move_bit_right<<i)
+
 
     return board_info
 
@@ -519,28 +559,33 @@ def move_queen(move,board_info):
 
 def update_board_info(board_info:list)->list:
     board_info = pawn_moves(board_info)
-    board_info = king_moves(board_info)
-    # board_info = knight_moves(board_info)
-    board_info = bishop_moves(board_info)
-    board_info = rook_moves(board_info)
-    board_info = queen_moves(board_info)
+    # board_info = king_moves(board_info)
+    # # board_info = knight_moves(board_info)
+    # board_info = bishop_moves(board_info)
+    # board_info = rook_moves(board_info)
+    # board_info = queen_moves(board_info)
     return board_info
 
-def eval(board_info:list)->str:
+def piece_count(board_info:list)->float:
     pieces = board_info[0]
-    evaluation = 0
-    evaluation += pieces[6].bit_count()
-    evaluation -= pieces[0].bit_count()
-    evaluation += 5*pieces[7].bit_count()
-    evaluation -= 5*pieces[1].bit_count()
-    evaluation += 3*pieces[8].bit_count()
-    evaluation -= 3*pieces[2].bit_count()
-    evaluation += 3*pieces[9].bit_count()
-    evaluation -= 3*pieces[3].bit_count()
-    evaluation += 9*pieces[10].bit_count()
-    evaluation -= 9*pieces[4].bit_count()
-    evaluation += 300*pieces[11].bit_count()
-    evaluation -= 300*pieces[5].bit_count()
+    piece_count = 0.0
+    piece_count += float(pieces[6].bit_count())
+    piece_count -= float(pieces[0].bit_count())
+    piece_count += 5 * float(pieces[7].bit_count())
+    piece_count -= 5 * float(pieces[1].bit_count())
+    piece_count += 3 * float(pieces[8].bit_count())
+    piece_count -= 3 * float(pieces[2].bit_count())
+    piece_count += 3 * float(pieces[9].bit_count())
+    piece_count -= 3 * float(pieces[3].bit_count())
+    piece_count += 9 * float(pieces[10].bit_count())
+    piece_count -= 9 * float(pieces[4].bit_count())
+    piece_count += 300 * float(pieces[11].bit_count())
+    piece_count -= 300 * float(pieces[5].bit_count())
+    return piece_count
+
+def eval(board_info:list)->str:
+    evaluation = 0.0
+    evaluation += piece_count(board_info)
     if evaluation>=150:
         return 'M'
     elif evaluation<=-150:
@@ -583,4 +628,6 @@ def move(move,board_info):
     elif move[0] & (board_info[0][6] | board_info[0][0]) != 0:
         move_pawn(move, board_info)
         return board_info
+    else:
+        print('error')
 
