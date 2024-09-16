@@ -7,7 +7,7 @@ def get_bitboards_and_other_stuff(fen):
         0b1000: "O-O",
         0b0100: "O-O-O",
         0b0010: "O-O",
-        0b0001: "O-O-O"
+        0b0001: "OO-O"
     }
 
     Enpassant_dict = {
