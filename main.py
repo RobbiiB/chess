@@ -3,7 +3,7 @@ import moves as mv
 from time import time
 
 # Starting fen
-FEN_start = ('rnbqkbnr/pppppppp/8/4Q3/8/8/PPPPPPPP/RNB1KBNR w KQkq h6 0 0')
+FEN_start = ('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq h6 0 0')
 
 
 #board_info[0], board_info[1], board_info[2], board_info[3], half_moves, full_moves 
@@ -17,7 +17,8 @@ t=[]
 cf.make_grid(board_info)
 t_1= time()
 board_info = mv.update_board_info(board_info)
-
+for num in board_info[6]:
+    print(num)
 # board_info=cf.move(move, board_info)
 # board_info[1]=not board_info[1]
 t_2 = time()

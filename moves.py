@@ -102,9 +102,9 @@ def king_moves(piece_boards, castle_board, player):
             move_list.append(move_dl)
         if move_dr.bit_count()==2:
             move_list.append(move_dr)
-        if castle_board&0b1000!=0 and 0b110&~(w_tot_bitboard|b_tot_bitboard)!=0:
+        if castle_board&0b1000!=0 and 0b110&(w_tot_bitboard|b_tot_bitboard)==0:
             move_list.append(0b1010)
-        if castle_board&0b100!=0 and 0b1110000&~(w_tot_bitboard|b_tot_bitboard)!=0:
+        if castle_board&0b100!=0 and 0b1110000&(w_tot_bitboard|b_tot_bitboard)==0:
             move_list.append(0b101000)
 
 
@@ -137,9 +137,9 @@ def king_moves(piece_boards, castle_board, player):
             move_list.append(move_dl)
         if move_dr.bit_count() == 2:
             move_list.append(move_dr)
-        if castle_board & 0b10 != 0 and (0b110<<56) & ~(w_tot_bitboard | b_tot_bitboard) != 0:
+        if castle_board & 0b10 != 0 and (0b110<<56) &(w_tot_bitboard | b_tot_bitboard) == 0:
             move_list.append(0b1010<<56)
-        if castle_board & 0b1 != 0 and (0b1110000<<56) & ~(w_tot_bitboard | b_tot_bitboard) != 0:
+        if castle_board & 0b1 != 0 and (0b1110000<<56) &(w_tot_bitboard | b_tot_bitboard) == 0:
             move_list.append(0b101000<<56)
 
     return move_list
