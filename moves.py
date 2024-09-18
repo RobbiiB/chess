@@ -1,10 +1,16 @@
+import engine as eg
+from engine import piece_count
+
+
 def pawn_moves(piece_boards, enpassant_boards, player):
     move_list = []
+    promotion_moves=[]
     b_tot_bitboard = piece_boards[0] | piece_boards[1] | piece_boards[2] | piece_boards[3] | piece_boards[4] | piece_boards[5]
     w_tot_bitboard = piece_boards[6] | piece_boards[7] | piece_boards[8] | piece_boards[9] | piece_boards[10] | piece_boards[11]
     tot_bitboard = b_tot_bitboard|w_tot_bitboard
     not_hfile = 0b1111111011111110111111101111111011111110111111101111111011111110
     not_afile = 0b111111101111111011111110111111101111111011111110111111101111111
+    promotion_mask = 0b1111111111111111
 
     #calculating the squares the pawns can move[1]to by pushing the pawns
     if player == True:
@@ -15,6 +21,8 @@ def pawn_moves(piece_boards, enpassant_boards, player):
         for i in range(48):
             if pawn_push_mask & (pointer<<i)!=0:
                 move_list.append(move_bit<<i)
+                if (move_bit<<i) & (promotion_mask<<48)!=0:
+                    promotion_moves.append(len(move_list)-1)
 
         pointer = 0b1 << 8
         pawn_double_push_mask = (piece_boards[6]&0b1111111100000000) & ~(tot_bitboard>>16) & ~(tot_bitboard>>8)
@@ -33,8 +41,12 @@ def pawn_moves(piece_boards, enpassant_boards, player):
         for i in range(47):
             if capture_left_mask & (pointer<<i)!=0:
                 move_list.append(move_bit_left<<i)
+                if (move_bit_left<<i) & (promotion_mask<<48)!=0:
+                    promotion_moves.append(len(move_list)-1)
             if capture_right_mask & (pointer<<i+1)!=0:
                 move_list.append(move_bit_right<<i+1)
+                if (move_bit_right<<i) & (promotion_mask<<48)!=0:
+                    promotion_moves.append(len(move_list)-1)
 
     elif player == False:
         pointer = 0b1
@@ -44,6 +56,8 @@ def pawn_moves(piece_boards, enpassant_boards, player):
         for i in range(48):
             if pawn_push_mask & (pointer<<i)!=0:
                 move_list.append(move_bit<<i)
+                if (move_bit<<i) & (promotion_mask)!=0:
+                    promotion_moves.append(len(move_list)-1)
 
         pointer = 0b1
         pawn_double_push_mask = (((piece_boards[0]>>48) & 0b11111111) & ~(tot_bitboard>>40)) & ~(tot_bitboard>>32)
@@ -61,11 +75,15 @@ def pawn_moves(piece_boards, enpassant_boards, player):
         for i in range(47):
             if capture_left_mask & (pointer<<i+1)!=0:
                 move_list.append(move_bit_left<<i+1)
+                if (move_bit_left<<i) & (promotion_mask)!=0:
+                    promotion_moves.append(len(move_list)-1)
             if capture_right_mask & (pointer<<i)!=0:
                 move_list.append(move_bit_right<<i)
+                if (move_bit_right<<i) & (promotion_mask)!=0:
+                    promotion_moves.append(len(move_list)-1)
 
 
-    return move_list
+    return move_list, promotion_moves
 
 def king_moves(piece_boards, castle_board, player):
     move_list = []
@@ -383,29 +401,31 @@ def move_queen(move,board_info):
 
 
 def update_board_info(board_info:list)->list:
+    board_info[6] = []
+
     piece_boards = board_info[0]
     enpassant_boards = board_info[3]
     player = board_info[1]
     castle_board = board_info[2]
-    pawn_move_list = pawn_moves(piece_boards, enpassant_boards, player) #done
+    pawn_move_list, board_info[7] = pawn_moves(piece_boards, enpassant_boards, player) #done
     king_move_list = king_moves(piece_boards, castle_board, player) #done
     knight_move_list = knight_moves(piece_boards, player) #done
     bishop_move_list = bishop_moves(piece_boards, player) #done
     rook_move_list = rook_moves(piece_boards, player) #done
     queen_move_list = queen_moves(piece_boards, player) #done
-    board_info[6].extend(pawn_move_list)
-    board_info[6].extend(king_move_list)
-    board_info[6].extend(knight_move_list)
-    board_info[6].extend(bishop_move_list)
-    board_info[6].extend(rook_move_list)
-    board_info[6].extend(queen_move_list)
+    board_info[6].append(pawn_move_list)
+    board_info[6].append(king_move_list)
+    board_info[6].append(knight_move_list)
+    board_info[6].append(bishop_move_list)
+    board_info[6].append(rook_move_list)
+    board_info[6].append(queen_move_list)
     return board_info
 
 
 # @jit
-def move(move,board_info):
-
-
+def move(board_info, **kwargs):
+    player = board_info[1]
+    move_function = [move_pawn, move_king, move_knight, move_bishop, move_rook, move_queen]
     board_sqrs_dict = {
             "a8": 63, "b8": 62, "c8": 61, "d8": 60, "e8": 59, "f8": 58, "g8": 57, "h8": 56,
             "a7": 55, "b7": 54, "c7": 53, "d7": 52, "e7": 51, "f7": 50, "g7": 49, "h7": 48,
@@ -416,26 +436,43 @@ def move(move,board_info):
             "a2": 15, "b2": 14, "c2": 13, "d2": 12, "e2": 11, "f2": 10, "g2": 9,  "h2": 8,
             "a1": 7,  "b1": 6,  "c1": 5,  "d1": 4,  "e1": 3,  "f1": 2,  "g1": 1,  "h1": 0
         }
-    move = (2 ** board_sqrs_dict[move[:2]],2 ** board_sqrs_dict[move[2:4]],move[-1])
+    try:
+        move= kwargs["move"]
+        if move=="0-0":
+            move_bit_board = 0b1010 if player else 0b1010<<56
+            piece_num = 1
+        elif move=="0-0-0":
+            move_bit_board = 0b101000 if player else 0b101000<<56
+            piece_num = 1
+        elif len(move)==4:
+            try:
+                move_bit_board = 0b1<<board_sqrs_dict[move[:2]] | 0b1<<board_sqrs_dict[move[2:]]
+                for i,moves in enumerate(board_info[6]):
+                    if move_bit_board in moves:
+                        piece_num=i
+                    else:
+                        print("Error: not a legal move")
+                        return board_info
+            except:
+                print("Error: not a legal move")
+                return board_info
+        elif len(move)==5:
+            try:
+                move_bit_board = 0b1<<board_sqrs_dict[move[:2]] | 0b1<<board_sqrs_dict[move[2:4]]
+                if move_bit_board in board_info[6][0]:
+                    piece_num=0
+                else:
+                    print("Error: not a legal move")
+                    return board_info
+            except:
+                print("Error: not a legal move")
+                return board_info
 
 
-    if move[0] & (board_info[0][11] | board_info[0][5]) != 0:
-        move_king(move, board_info)
-        return board_info
-    elif move[0] & (board_info[0][10] | board_info[0][4]) != 0:
-        move_queen(move,board_info)
-        pass
-    elif move[0] & (board_info[0][9] | board_info[0][3]) != 0:
-        move_bishop(move,board_info)
-        return board_info
-    elif move[0] & (board_info[0][8] | board_info[0][2]) != 0:
-        move_knight(move,board_info)
-        pass
-    elif move[0] & (board_info[0][7] | board_info[0][1]) != 0:
-        move_rook(move,board_info)
-        pass
-    elif move[0] & (board_info[0][6] | board_info[0][0]) != 0:
-        move_pawn(move, board_info)
-        return board_info
-    else:
-        print('error')
+        movebit_board = 0b1<< board_sqrs_dict[move[:2]]|0b1<< board_sqrs_dict[move[2:4]]
+    except:
+        piece_idx, move_idx = eg.select_move(board_info)
+        print(f"engine choses {piece_idx}, {move_idx}")
+        move = board_info[6][piece_idx][move_idx]
+
+
