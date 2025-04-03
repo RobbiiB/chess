@@ -1,5 +1,6 @@
-import engine as eg
-from engine import piece_count
+import evaluation as ev
+import chess_functions as cf
+from evaluation import piece_count
 
 
 def pawn_moves(piece_boards, enpassant_boards, player):
@@ -298,106 +299,72 @@ def queen_moves(piece_boards, player):
     move_list.extend(bishop_moves(piece_boards, player, piece=10))
     return move_list
 
-# @jit
-def move_pawn(move,board_info:list):
 
 
-    #single pawn push
-    if move[0]/move[1]== 2**8 or move[1]/move[0] == 2**8:
-        if move[1]& board_info[6] != 0b0:
-            try:
-                int(move[2])
-                board_info[0][(6 if board_info[1]==True else 0) ] = (board_info[0][(6 if board_info[1]==True else 0)] & ~move[0]) | move[1]
-            except:
-                board_info[0][(6 if board_info[1] == True else 0)] = (board_info[0][(6 if board_info[1] == True else 0)] & ~move[0])
-                board_info[0][(move[2].upper() if board_info[1] == True else move[2].lower())] = (board_info[0][(move[2].upper() if board_info[1] == True else move[2].lower())] | move[1])
-        else:
-            board_info[1] = not board_info[1]
-            return board_info[0], board_info[1], board_info[3]
+def move_piece(move_bit_board:int,board_info:list)->list:
+    #castle + promotion moves
+    if move_bit_board.bit_count()==3:
+        if move_bit_board == 0b1011:
+            board_info[0][5] ^= 0b1010
+            board_info[0][7] ^= 0b101
+        elif move_bit_board == 0b101001:
+            board_info[0][5] ^= 0b101000
+            board_info[0][7] ^= 0b10010000
+        elif move_bit_board == 0b1011<<56:
+            board_info[0][11] ^= 0b1011<<56
+            board_info[0][1] ^= 0b101<<56
+        elif move_bit_board == 0b101001<<56:
+            board_info[0][11] ^= 0b101000<<56
+            board_info[0][1] ^= 0b10010000<<56
+        elif move_bit_board&0b10000000000000000 == 0b10000000000000000:
+            move_bit_board^=0b10000000000000000
+            board_info[0][6 if board_info[1] else 0] = board_info[0][6 if board_info[1] else 0] & ~(board_info[0][6 if board_info[1] else 0]&move_bit_board)
+            board_info[0][10 if board_info[1] else 4] = board_info[0][10 if board_info[1] else 4] | (move_bit_board&(0b11111111 if not board_info[1] else 0b11111111<<56))
+            for i in range(6):
+                board_info[0][i + (0 if board_info[1] else 6)] = board_info[0][i + (0 if board_info[1] else 6)] & ~(board_info[0][i + (0 if board_info[1] else 6)] & move_bit_board)
+        elif move_bit_board&0b100000000000000000 == 0b100000000000000000:
+            move_bit_board^=0b100000000000000000
+            board_info[0][6 if board_info[1] else 0] = board_info[0][6 if board_info[1] else 0] & ~(board_info[0][6 if board_info[1] else 0]&move_bit_board)
+            board_info[0][7 if board_info[1] else 1] = board_info[0][7 if board_info[1] else 1] | (move_bit_board&(0b11111111 if not board_info[1] else 0b11111111<<56))
+            for i in range(6):
+                board_info[0][i + (0 if board_info[1] else 6)] = board_info[0][i + (0 if board_info[1] else 6)] & ~(board_info[0][i + (0 if board_info[1] else 6)] & move_bit_board)
+        elif move_bit_board&0b1000000000000000000 == 0b1000000000000000000:
+            move_bit_board^=0b1000000000000000000
+            board_info[0][6 if board_info[1] else 0] = board_info[0][6 if board_info[1] else 0] & ~(board_info[0][6 if board_info[1] else 0]&move_bit_board)
+            board_info[0][8 if board_info[1] else 2] = board_info[0][8 if board_info[1] else 2] | (move_bit_board&(0b11111111 if not board_info[1] else 0b11111111<<56))
+            for i in range(6):
+                board_info[0][i + (0 if board_info[1] else 6)] = board_info[0][i + (0 if board_info[1] else 6)] & ~(board_info[0][i + (0 if board_info[1] else 6)] & move_bit_board)
+        elif move_bit_board&0b10000000000000000000 == 0b10000000000000000000:
+            move_bit_board^=0b10000000000000000000
+            board_info[0][6 if board_info[1] else 0] = board_info[0][6 if board_info[1] else 0] & ~(board_info[0][6 if board_info[1] else 0]&move_bit_board)
+            board_info[0][9 if board_info[1] else 3] = board_info[0][9 if board_info[1] else 3] | (move_bit_board&(0b11111111 if not board_info[1] else 0b11111111<<56))
+            for i in range(6):
+                board_info[0][i + (0 if board_info[1] else 6)] = board_info[0][i + (0 if board_info[1] else 6)] & ~(board_info[0][i + (0 if board_info[1] else 6)] & move_bit_board)
 
-    #double pawn push
-    elif move[0]/move[1]== 2**16 or move[1]/move[0] == 2**16:
-        if move[1]& board_info[6] != 0b0:
-            board_info[3] = move[0]>>8 & ~board_info[1] | move[0]<<8 & ~(board_info[1]==False)
-            board_info[0][(6 if board_info[1]==True else 0)] = (board_info[0][(6 if board_info[1]==True else 0)] & ~move[0]) | move[1]
-        else:
-            board_info[1] = not board_info[1]
-            return board_info[0], board_info[1], board_info[3]
+    else: #all other moves
+        for i in range(6):
+            if board_info[0][i + (6 if board_info[1] else 0)] & move_bit_board != 0b0:
+                board_info[0][i + (6 if board_info[1] else 0)] ^= move_bit_board
+                break
 
-    #captures and enpassant
-    elif move[1] & board_info[7] != 0b0:
-        if board_info[3] & ~move[1] == 0b0:
-            board_info[0][0] = (board_info[0][0] & ~move[1]>>8)
-            board_info[0][6] = (board_info[0][6] & ~move[1]<<8)
-        for piece in board_info[0]:
-            board_info[0][piece] = board_info[0][piece] & ~move[1]
-
-        try:
-            int(move[2])
-            board_info[0][(6 if board_info[1]==True else 0)] = (board_info[0][(6 if board_info[1]==True else 0)] & ~move[0]) | move[1]
-        except:
-            board_info[0][(6 if board_info[1] == True else 0)] = (board_info[0][(6 if board_info[1] == True else 0)] & ~move[0])
-            board_info[0][(move[2].upper() if board_info[1] == True else move[2].lower())] = (board_info[0][(move[2].upper() if board_info[1] == True else move[2].lower())] | move[1])
-
-    #
-
-    #else illegal move
-    else:
-        board_info[1] = not(board_info[1])
-        print('smthng wrong bruv')
-        return board_info[0], board_info[1], board_info[3]
-
-    return board_info[0], board_info[1], board_info[3]
-
-# @jit
-def move_king(move,board_info:list)->list:
-
-    if move[1]& board_info[8] == 0:
-        board_info[1] = not(board_info[1])
-        return board_info
+        for i in range(6):
+            board_info[0][i + (0 if board_info[1] else 6)] = board_info[0][i + (0 if board_info[1] else 6)]&~(board_info[0][i + (0 if board_info[1] else 6)] & move_bit_board)
 
 
-    if move[0]/move[1] == 4:
-        board_info[0][11 if board_info[1]==True else 5] = move[1]
-        board_info[0][7 if board_info[1]==True else 1] = (board_info[0][7 if board_info[1]==True else 1] & ~ move[0]>>3) | move[1]<<1
-        board_info[2] = board_info[2] & (0b0111 if board_info[1]==True else 0b1101)
-        return board_info
+        if board_info[3]&board_info[0][6 if board_info[1] else 0] == board_info[3]:
+            board_info[0][0 if board_info[1] else 6]^=board_info[3]>>8 if board_info[1] else board_info[3]<<8
 
-    elif move[1]/move[0] == 4:
-        board_info[0][11 if board_info[1] == True else 5] = move[1]
-        board_info[0][7 if board_info[1] == True else 1] = (board_info[0][7 if board_info[1] == True else 1] & ~move[
-            0] << 4) | move[1] >> 1
-        board_info[2] = board_info[2] & (0b1011 if board_info[1]==True else 0b1110)
-
-        return board_info
+        #setting en passant
+        board_info[3]=0b0
+        for i in range(8):
+            if move_bit_board == (0x10001<<8 if board_info[1] else 0x10001<<32)<<i:
+                board_info[3] = (0b1<<16 if board_info[1] else 0b1<<40)<<i
+                break
 
 
-    elif board_info[1] == True:
-        board_info[2] = board_info[2] & 0b0011
-        for piece in range(12):
-            board_info[0][piece] = board_info[0][piece] & ~move[1]
-        board_info[0][11] = move[1]
-        board_info[2] = board_info[2] & 0b0011
 
-    elif board_info[1] == False:
-        board_info[2] = board_info[2] & 0b1100
-        for piece in range(12):
-            board_info[0][piece] = board_info[0][piece] & ~move[1]
-        board_info[0][5] = move[1]
-        board_info[2] = board_info[2] & 0b1100
     return board_info
 
-def move_knight(move,board_info):
-    pass
-
-def move_bishop(move,board_info):
-    pass
-
-def move_rook(move,board_info):
-    pass
-
-def move_queen(move,board_info):
-    pass
 
 
 def update_board_info(board_info:list)->list:
@@ -413,66 +380,69 @@ def update_board_info(board_info:list)->list:
     bishop_move_list = bishop_moves(piece_boards, player) #done
     rook_move_list = rook_moves(piece_boards, player) #done
     queen_move_list = queen_moves(piece_boards, player) #done
-    board_info[6].append(pawn_move_list)
-    board_info[6].append(king_move_list)
-    board_info[6].append(knight_move_list)
-    board_info[6].append(bishop_move_list)
-    board_info[6].append(rook_move_list)
-    board_info[6].append(queen_move_list)
+    board_info[6].extend(pawn_move_list)
+    board_info[6].extend(king_move_list)
+    board_info[6].extend(knight_move_list)
+    board_info[6].extend(bishop_move_list)
+    board_info[6].extend(rook_move_list)
+    board_info[6].extend(queen_move_list)
     return board_info
 
-
-# @jit
-def move(board_info, **kwargs):
-    player = board_info[1]
-    move_function = [move_pawn, move_king, move_knight, move_bishop, move_rook, move_queen]
+def make_move(board_info:list, **kwargs)->list:
     board_sqrs_dict = {
-            "a8": 63, "b8": 62, "c8": 61, "d8": 60, "e8": 59, "f8": 58, "g8": 57, "h8": 56,
-            "a7": 55, "b7": 54, "c7": 53, "d7": 52, "e7": 51, "f7": 50, "g7": 49, "h7": 48,
-            "a6": 47, "b6": 46, "c6": 45, "d6": 44, "e6": 43, "f6": 42, "g6": 41, "h6": 40,
-            "a5": 39, "b5": 38, "c5": 37, "d5": 36, "e5": 35, "f5": 34, "g5": 33, "h5": 32,
-            "a4": 31, "b4": 30, "c4": 29, "d4": 28, "e4": 27, "f4": 26, "g4": 25, "h4": 24,
-            "a3": 23, "b3": 22, "c3": 21, "d3": 20, "e3": 19, "f3": 18, "g3": 17, "h3": 16,
-            "a2": 15, "b2": 14, "c2": 13, "d2": 12, "e2": 11, "f2": 10, "g2": 9,  "h2": 8,
-            "a1": 7,  "b1": 6,  "c1": 5,  "d1": 4,  "e1": 3,  "f1": 2,  "g1": 1,  "h1": 0
-        }
+                "a8": 63, "b8": 62, "c8": 61, "d8": 60, "e8": 59, "f8": 58, "g8": 57, "h8": 56,
+                "a7": 55, "b7": 54, "c7": 53, "d7": 52, "e7": 51, "f7": 50, "g7": 49, "h7": 48,
+                "a6": 47, "b6": 46, "c6": 45, "d6": 44, "e6": 43, "f6": 42, "g6": 41, "h6": 40,
+                "a5": 39, "b5": 38, "c5": 37, "d5": 36, "e5": 35, "f5": 34, "g5": 33, "h5": 32,
+                "a4": 31, "b4": 30, "c4": 29, "d4": 28, "e4": 27, "f4": 26, "g4": 25, "h4": 24,
+                "a3": 23, "b3": 22, "c3": 21, "d3": 20, "e3": 19, "f3": 18, "g3": 17, "h3": 16,
+                "a2": 15, "b2": 14, "c2": 13, "d2": 12, "e2": 11, "f2": 10, "g2": 9,  "h2": 8,
+                "a1": 7,  "b1": 6,  "c1": 5,  "d1": 4,  "e1": 3,  "f1": 2,  "g1": 1,  "h1": 0
+            }
     try:
-        move= kwargs["move"]
-        if move=="0-0":
-            move_bit_board = 0b1010 if player else 0b1010<<56
-            piece_num = 1
+        move = kwargs["move"]
+        # print(move)
+        #castle moves
+        if type(move) == int:
+            move_bit_board = move
+        elif move == "0-0":
+            move_bit_board = 0b1011 if board_info[1] else 0b1011<<56
+            if move_bit_board not in board_info[6]:
+                print("Error: not a valid move")
+                return board_info[1]
         elif move=="0-0-0":
-            move_bit_board = 0b101000 if player else 0b101000<<56
-            piece_num = 1
-        elif len(move)==4:
-            try:
-                move_bit_board = 0b1<<board_sqrs_dict[move[:2]] | 0b1<<board_sqrs_dict[move[2:]]
-                for i,moves in enumerate(board_info[6]):
-                    if move_bit_board in moves:
-                        piece_num=i
-                    else:
-                        print("Error: not a legal move")
-                        return board_info
-            except:
-                print("Error: not a legal move")
-                return board_info
-        elif len(move)==5:
-            try:
-                move_bit_board = 0b1<<board_sqrs_dict[move[:2]] | 0b1<<board_sqrs_dict[move[2:4]]
-                if move_bit_board in board_info[6][0]:
-                    piece_num=0
-                else:
-                    print("Error: not a legal move")
-                    return board_info
-            except:
-                print("Error: not a legal move")
-                return board_info
+            move_bit_board = 0b101001 if board_info[1] else 0b101001<<56
+            if move_bit_board not in board_info[6]:
+                print("Error: not a valid move")
+                return board_info[1]
 
+        #regular moves
+        elif move.__len__()==4:
+            move_bit_board = 0b1 << board_sqrs_dict[move[:2]] | 0b1 << board_sqrs_dict[move[2:]]
+            if move_bit_board not in board_info[6]:
+                print("Error: not a valid move")
 
-        movebit_board = 0b1<< board_sqrs_dict[move[:2]]|0b1<< board_sqrs_dict[move[2:4]]
+        #promotions
+        elif move.__len__()==5:
+            move_bit_board = 0b1 << board_sqrs_dict[move[:2]] | 0b1 << board_sqrs_dict[move[2:4]]
+            if move[-1] == "Q":
+                move_bit_board |= 0b10000000000000000
+            elif move[-1] == "R":
+                move_bit_board |= 0b100000000000000000
+            elif move[-1] == "N":
+                move_bit_board |= 0b1000000000000000000
+            elif move[-1] == "B":
+                move_bit_board |= 0b10000000000000000000
+            else:
+                print("Error: not a valid move")
+                return board_info
     except:
-        piece_idx, move_idx = eg.select_move(board_info)
-        print(f"engine choses {piece_idx}, {move_idx}")
-        move = board_info[6][piece_idx][move_idx]
+        print("no move given")
+        # move_idx = select_move(board_info)
+        # print(f"engine choses {move_idx}, {bin(board_info[6][move_idx])}")
+        # move_bit_board = board_info[6][move_idx]
+    board_info = move_piece(move_bit_board, board_info)
+    board_info[1] = not board_info[1]
+    return board_info
 
 
