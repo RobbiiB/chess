@@ -93,7 +93,7 @@ def king_moves(piece_boards, castle_board, player):
     not_hfile = 0b1111111011111110111111101111111011111110111111101111111011111110
     not_afile = 0b111111101111111011111110111111101111111011111110111111101111111
     if player == True: #white to play
-        king_up = piece_boards[11]&0b11111111111111111111111111111111111111111111111111111111
+        king_up = piece_boards[11]&0b1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111
         king_down = piece_boards[11]&~0b11111111
         king_left = piece_boards[11]&not_afile
         king_right = piece_boards[11]&not_hfile
