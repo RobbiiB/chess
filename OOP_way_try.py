@@ -973,6 +973,19 @@ class Game():
 
         subprocess.call(["say", move_name])
 
+    def make_pgn(self, move:int|str, pgn:str):
+        if type(move) is str:
+            move_num = self.game_state.move_to_num(move)
+        else:
+            move_num = move
+
+        if self.game_state.half_moves % 2 == 0:
+            pgn += " " + f"{self.game_state.full_moves}." + f" {self.game_state.num_to_alg(move_num)}"
+        else:
+            pgn += " " + f"{self.game_state.num_to_alg(move_num)}"
+
+        return pgn
+
     def game_loop_pvp(self):
         fen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq g6 0 0'
         self.game_state.set_game_state_from_fen(fen=fen)
@@ -1009,6 +1022,8 @@ class Game():
 
         self.grid_renderer.render_grid(self.game_state.piece_bitboards)
     def game_loop_pve(self, player_is_white=None):
+        pgn = ""
+        t = []
         fen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq g6 0 0'
         self.game_state.set_game_state_from_fen(fen=fen)
         self.grid_renderer.render_grid(self.game_state.piece_bitboards)
@@ -1033,6 +1048,7 @@ class Game():
                         if move == "Stop":
                             # game_going = False
                             break
+                        self.make_pgn(move,pgn)
                     else:
                         t1 = time()
                         eval = self.engine.engine(game_state=self.game_state)
@@ -1042,6 +1058,7 @@ class Game():
                         move_name = self.game_state.num_to_alg(move)
 
                         print(t2-t1)
+                        t.append(t2-t1)
                         self.read_move_out(move_name)
                         print(f"eval: {eval[0]}, move:{move_name}")
 
@@ -1049,6 +1066,12 @@ class Game():
                     if made_move:
                         # self.game_state.white_turn = not self.game_state.white_turn
                         self.grid_renderer.render_grid(self.game_state.piece_bitboards)
+        times = np.array(t)
+        print(times.max())
+        print(times.min())
+        print(times.mean())
+
+        print(pgn)
 
     def game_loop_eve(self, max_moves: int):
         pgn = ""
@@ -1081,13 +1104,9 @@ class Game():
                     t.append(t2-t1)
                     move = eval[1]
 
-                    if self.game_state.half_moves%2==0:
-                        pgn += " "+ f"{self.game_state.full_moves}."+f" {self.game_state.num_to_alg(move)}"
-                    else:
-                        pgn += " "+f"{self.game_state.num_to_alg(move)}"
+                    pgn = self.make_pgn(move,pgn)
 
                     print(f"eval: {eval[0]}, move:{self.game_state.num_to_move(move)}")
-                    print(pgn)
                     made_move = self.game_state.make_move(move=move)
                     if made_move:
                         # self.game_state.white_turn = not self.game_state.white_turn
@@ -1103,6 +1122,6 @@ class Game():
 
 if __name__=="__main__":
     new_game = Game()
-    new_game.game_loop_pve(False)
+    new_game.game_loop_pve()
 
 
