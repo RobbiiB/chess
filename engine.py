@@ -18,7 +18,6 @@ def move_choice_NegaMax(board_info:list)->int:
             max = score
             move_idx = i
 
-
     return move_idx
 
 
