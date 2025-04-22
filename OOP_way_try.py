@@ -131,6 +131,7 @@ class Game_state():
             move += self.inv_board_sqrs_dict[(firstpart^move_num).bit_length()-1]
 
         elif move_num.bit_count()==3:
+            print(bin(move_num))
             piece_list = ["Q", "R", "N", "B"]
 
             """
@@ -156,12 +157,12 @@ class Game_state():
         elif move == "O-O-O":
             move_num = self.castle_dict["Q" if self.white_turn else "q"]
         elif move.__len__()==4:
-            move_num = self.board_sqrs_dict[move[:2]] | self.board_sqrs_dict[move[2:]]
+            move_num = (0b1<<self.board_sqrs_dict[move[:2]]) | (0b1<<self.board_sqrs_dict[move[2:]])
         elif move.__len__()==5:
             piece_list = [ "Q", "R", "N", "B"]
-            move_num = (self.board_sqrs_dict[move[:2]] |
-                        self.board_sqrs_dict[move[2:4]] |
-                        (0b10000000000000000 << piece_list.index(move[-1])))
+            move_num = ((0b1<<self.board_sqrs_dict[move[:2]]) |
+                        (0b1<<self.board_sqrs_dict[move[2:4]]) |
+                        (0b1_00000000_00000000 << piece_list.index(move[-1])))
         else:
             print("something went wrong")
         return move_num
@@ -169,7 +170,7 @@ class Game_state():
     def num_to_alg(self, move:int):
         if move.bit_count()==1:
             alg = self.castle_dict[move]
-        if move.bit_count()==2:
+        elif move.bit_count()==2:
             for i in range(6):
                 name = self.piece_bitboards.piece_names[2*i+ (0 if self.white_turn else 1)]
                 if move&self.piece_bitboards.__getattribute__(name)!=0:
@@ -214,7 +215,7 @@ class Game_state():
                         else:
                             coordinate_move = self.num_to_move(move)
                             alg = "B"+coordinate_move[:2]+coordinate_move[2:]
-        if move.bit_count()==3:
+        elif move.bit_count()==3:
             piece_list = ["Q", "R", "N", "B"]
             promotion_part = (move >> 16 & 0b1111)
             last_part = promotion_part.bit_length() - 1
@@ -224,6 +225,7 @@ class Game_state():
                 alg = coordinate_move[:1] + "x" + coordinate_move[2:4] +"=" + piece
             else:
                 alg = self.num_to_move(move)[2:4] +"=" + piece
+        else: alg = ""
         return alg
 
 
@@ -795,7 +797,6 @@ class Engine():
         self.grid_renderer: Grid_Renderer = Grid_Renderer()
 
     def static_eval(self, piece_bitboards: Piece_Bitboards):
-
         eval = self.material_count(piece_bitboards)
         eval+= self.king_safety(piece_bitboards)
         eval+= self.home_sqr_penalty(piece_bitboards)
@@ -921,16 +922,51 @@ class Engine():
         t0 = time()
         depth=1
         while True:
-            print(depth)
             eval = self.alpha_beta(game_state, depth, -float("inf"), float("inf"))
             t1 = time()
             if depth>3:
+                # print(depth)
                 break
-
+            elif t1-t0>1:
+                # print(t1-t0)
+                # print(depth)
+                break
             else:
                 game_state.__setattr__("move_list",[move for y,move in sorted(zip(eval[-1], game_state.move_list))])
             depth+=1
         return eval
+    def matrix_board(self, piece_bitboards: Piece_Bitboards)-> np.ndarray:
+        pawns = np.pad(np.array(list(str(bin(piece_bitboards.w_pawn))[2:]), dtype=int),(64-piece_bitboards.w_pawn.bit_length() ,0), mode = "constant", constant_values=0) - np.pad(np.array(list(str(bin(piece_bitboards.b_pawn))[2:]), dtype=int),(64-piece_bitboards.b_pawn.bit_length() ,0), mode = "constant", constant_values=0)
+        pawns = pawns.reshape([8,8])
+        rooks = np.pad(np.array(list(str(bin(piece_bitboards.w_rook))[2:]), dtype=int),
+                       (64 - piece_bitboards.w_rook.bit_length(), 0), mode="constant", constant_values=0) - np.pad(
+            np.array(list(str(bin(piece_bitboards.b_rook))[2:]), dtype=int),
+            (64 - piece_bitboards.b_rook.bit_length(), 0), mode="constant", constant_values=0)
+        rooks = rooks.reshape([8, 8])
+        knights = np.pad(np.array(list(str(bin(piece_bitboards.w_knight))[2:]), dtype=int),
+                       (64 - piece_bitboards.w_knight.bit_length(), 0), mode="constant", constant_values=0) - np.pad(
+            np.array(list(str(bin(piece_bitboards.b_knight))[2:]), dtype=int),
+            (64 - piece_bitboards.b_knight.bit_length(), 0), mode="constant", constant_values=0)
+        knights = knights.reshape([8, 8])
+        bishops = np.pad(np.array(list(str(bin(piece_bitboards.w_bishop))[2:]), dtype=int),
+                       (64 - piece_bitboards.w_bishop.bit_length(), 0), mode="constant", constant_values=0) - np.pad(
+            np.array(list(str(bin(piece_bitboards.b_bishop))[2:]), dtype=int),
+            (64 - piece_bitboards.b_bishop.bit_length(), 0), mode="constant", constant_values=0)
+        bishops = bishops.reshape([8, 8])
+        queens = np.pad(np.array(list(str(bin(piece_bitboards.w_queen))[2:]), dtype=int),
+                         (64 - piece_bitboards.w_queen.bit_length(), 0), mode="constant", constant_values=0) - np.pad(
+            np.array(list(str(bin(piece_bitboards.b_queen))[2:]), dtype=int),
+            (64 - piece_bitboards.b_queen.bit_length(), 0), mode="constant", constant_values=0)
+        queens = queens.reshape([8, 8])
+        kings = np.pad(np.array(list(str(bin(piece_bitboards.w_king))[2:]), dtype=int),
+                        (64 - piece_bitboards.w_king.bit_length(), 0), mode="constant", constant_values=0) - np.pad(
+            np.array(list(str(bin(piece_bitboards.b_king))[2:]), dtype=int),
+            (64 - piece_bitboards.b_king.bit_length(), 0), mode="constant", constant_values=0)
+        kings = kings.reshape([8, 8])
+
+        matrix = np.array([pawns, rooks, knights, bishops, queens, kings])
+
+        return matrix
 
 class Game():
     def __init__(self):
@@ -976,6 +1012,7 @@ class Game():
     def make_pgn(self, move:int|str, pgn:str):
         if type(move) is str:
             move_num = self.game_state.move_to_num(move)
+            print(move)
         else:
             move_num = move
 
@@ -987,7 +1024,7 @@ class Game():
         return pgn
 
     def game_loop_pvp(self):
-        fen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq g6 0 0'
+        fen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 0'
         self.game_state.set_game_state_from_fen(fen=fen)
         self.grid_renderer.render_grid(self.game_state.piece_bitboards)
         game_going = True
@@ -1048,7 +1085,10 @@ class Game():
                         if move == "Stop":
                             # game_going = False
                             break
-                        self.make_pgn(move,pgn)
+                        elif move.__len__()<3:
+                            print("try again")
+                            move=0b0
+                        pgn = self.make_pgn(move,pgn)
                     else:
                         t1 = time()
                         eval = self.engine.engine(game_state=self.game_state)
@@ -1105,8 +1145,12 @@ class Game():
                     move = eval[1]
 
                     pgn = self.make_pgn(move,pgn)
+                    ta = time()
+                    matrix = self.engine.matrix_board(self.game_state.piece_bitboards)
+                    tb = time()
+                    print(tb-ta)
 
-                    print(f"eval: {eval[0]}, move:{self.game_state.num_to_move(move)}")
+                    print(f"eval: {eval[0]}, move:{self.game_state.num_to_alg(move)}")
                     made_move = self.game_state.make_move(move=move)
                     if made_move:
                         # self.game_state.white_turn = not self.game_state.white_turn
@@ -1122,6 +1166,5 @@ class Game():
 
 if __name__=="__main__":
     new_game = Game()
-    new_game.game_loop_pve()
-
+    new_game.game_loop_eve(max_moves=1)
 
