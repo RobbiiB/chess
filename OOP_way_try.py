@@ -920,19 +920,19 @@ class Engine():
     def engine(self,game_state: Game_state):
         # eval = self.negamax(game_state, depth)
         t0 = time()
-        depth=1
+        depth=3
         while True:
             eval = self.alpha_beta(game_state, depth, -float("inf"), float("inf"))
             t1 = time()
-            if depth>3:
-                # print(depth)
+            if depth>=6:
                 break
-            elif t1-t0>1:
+            elif t1-t0>=1:
                 # print(t1-t0)
                 # print(depth)
                 break
             else:
                 game_state.__setattr__("move_list",[move for y,move in sorted(zip(eval[-1], game_state.move_list))])
+                #print(eval[-1])
             depth+=1
         return eval
     def matrix_board(self, piece_bitboards: Piece_Bitboards)-> np.ndarray:
@@ -1050,9 +1050,9 @@ class Game():
                         # self.game_state.white_turn = not self.game_state.white_turn
                         self.grid_renderer.render_grid(self.game_state.piece_bitboards)
                         t1 = time()
-                        eval = self.engine.engine(game_state=self.game_state, depth=2)
+                        eval = self.engine.engine(game_state=self.game_state)
                         t2 = time()
-                        print(f"eval: {eval[0]}, move:{bin(eval[1])}")
+                        print(f"eval: {eval[0]}, move: {bin(eval[1])}")
 
                         print(t2 - t1)
             # game_going=False
@@ -1113,7 +1113,7 @@ class Game():
 
         print(pgn)
 
-    def game_loop_eve(self, max_moves: int):
+    def game_loop_eve(self, max_moves: int=100):
         pgn = ""
         t = []
         fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
@@ -1166,5 +1166,5 @@ class Game():
 
 if __name__=="__main__":
     new_game = Game()
-    new_game.game_loop_eve(max_moves=1)
+    new_game.game_loop_eve()
 

@@ -6,6 +6,7 @@ from random import randint
 
 def move_choice_NegaMax(board_info:list)->int:
     max = -float("inf")
+    move_idx=0
     for i in range(2):
         boardstate = board_info[:]
         boardstate = mv.make_move(boardstate, move=boardstate[6][i])
