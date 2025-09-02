@@ -42,6 +42,11 @@ class Game_state():
                                 0b0010: "O-O",
                                 0b0001: "O-O-O"
                             }
+        
+        self.last_captured: list = []
+        self.en_passants_list:list = []
+        
+        
 
     def copy(self, memodict=None):
         if memodict is None:
@@ -553,9 +558,134 @@ class Game_state():
         self.bishop_moves(piece_type="queen")
         self.rook_moves(piece_type="queen")
 
+    def reverse_move(self, move: int):
+        self.white_turn = not self.white_turn
+        if move.bit_count()==1:
+            if move==0b1000:
+                king = 0b1000
+                rook = 0b1 | (self.piece_bitboards.w_rook & ~0b100)
+
+                self.piece_bitboards.__setattr__("w_king", king)
+                self.piece_bitboards.__setattr__("w_rook", rook)
+
+                self.__setattr__("en_passants", 0)
+                self.__setattr__("castle_rights", self.castle_rights|(0b1100))
+            elif move == 0b100:
+                king = 0b1000
+                rook = (self.piece_bitboards.w_rook & ~0b10000) | 0b10000000
+
+                self.piece_bitboards.__setattr__("w_king", king)
+                self.piece_bitboards.__setattr__("w_rook", rook)
+
+                self.__setattr__("en_passants", 0)
+                self.__setattr__("castle_rights", self.castle_rights |(0b1100))
+            elif move == 0b10:
+                king = 0b1000<<56
+                rook = (0b1<<56) | (self.piece_bitboards.w_rook & ~(0b100<<56))
+
+                self.piece_bitboards.__setattr__("b_king", king)
+                self.piece_bitboards.__setattr__("b_rook", rook)
+
+                self.__setattr__("en_passants", 0)
+                self.__setattr__("castle_rights", self.castle_rights |(0b11))
+            elif move == 0b1:
+                king = 0b1000<<56
+                rook = (self.piece_bitboards.w_rook & ~(0b10000<<56)) | (0b10000000<<56)
+
+                self.piece_bitboards.__setattr__("b_king", king)
+                self.piece_bitboards.__setattr__("b_rook", rook)
+
+                self.__setattr__("en_passants", 0)
+                self.__setattr__("castle_rights", self.castle_rights |(0b11))
+        elif move.bit_count()==3:
+            promo = (move&0xF0000)
+            promo_sqr = move&0xFF_00_00_00_00_00_00_FF
+            pawn_sqr= (move & ~promo)&~promo_sqr
+
+            if self.last_captured[-1]==" ":
+                self.piece_bitboards.__setattr__("w_pawn"if self.white_turn else "b_pawn", 
+                                                 self.piece_bitboards.__getattribute__("w_pawn"if self.white_turn else "b_pawn") | pawn_sqr)
+            else:
+                self.piece_bitboards.__setattr__("w_pawn"if self.white_turn else "b_pawn", 
+                                                 self.piece_bitboards.__getattribute__("w_pawn"if self.white_turn else "b_pawn") | pawn_sqr)
+                self.piece_bitboards.__setattr__(self.last_captured[-1], 
+                                                 self.piece_bitboards.__getattribute__(self.last_captured[-1]) &~promo_sqr )
+                
+            if promo==0x10000:
+                queen = self.piece_bitboards.w_queen if self.white_turn else self.piece_bitboards.b_queen
+                self.piece_bitboards.__setattr__("w_queen" if self.white_turn else "b_queen",
+                                                queen &~ (promo_sqr))
+            elif promo==0x20000:
+                rook = self.piece_bitboards.w_rook if self.white_turn else self.piece_bitboards.b_rook
+                self.piece_bitboards.__setattr__("w_rook" if self.white_turn else "b_rook",
+                                                rook &~ (promo_sqr))
+            elif promo==0x40000:
+                knight = self.piece_bitboards.w_knight if self.white_turn else self.piece_bitboards.b_knight
+                self.piece_bitboards.__setattr__("w_knight" if self.white_turn else "b_knight",
+                                                knight &~ (promo_sqr))
+            else:
+                bishop = self.piece_bitboards.w_bishop if self.white_turn else self.piece_bitboards.b_bishop
+                self.piece_bitboards.__setattr__("w_bishop" if self.white_turn else "b_bishop",
+                                                bishop &~ (promo_sqr))
+        else:
+            if "*" in self.last_captured[-1]:
+                if self.last_captured[-1]=="b_pawn*":
+                    piece = self.piece_bitboards.w_pawn
+                    piece ^= move
+                    self.piece_bitboards.__setattr__("b_pawn", 
+                                                         self.piece_bitboards.__getattribute__("b_pawn")&~((move&piece)>>8))
+                    piece ^= move
+                    self.piece_bitboards.__setattr__("w_pawn", piece)
+                    pass
+                if self.last_captured[-1]=="w_pawn*":
+                    piece = self.piece_bitboards.w_pawn
+                    piece ^= move
+                    self.piece_bitboards.__setattr__("w_pawn", 
+                                                         self.piece_bitboards.__getattribute__("w_pawn")&~((move&piece)<<8))
+                    piece ^= move
+                    self.piece_bitboards.__setattr__("b_pawn", piece)
+                    pass
+                pass
+            elif lc_name:= self.last_captured[-1] != " ":
+                for i in range(6): #non_captures
+                    name = self.piece_bitboards.piece_names[2*i +(0 if self.white_turn else 1)]
+                    if (piece:=
+                    self.piece_bitboards.__getattribute__(name))&move!=0:
+                        self.piece_bitboards.__setattr__(lc_name, 
+                                                         self.piece_bitboards.__getattribute__(lc_name)&~(move&piece))
+                        piece ^= move
+                        self.piece_bitboards.__setattr__(name, piece)
+                        break
+                
+                pass
+            else:
+                for i in range(6): #non_captures
+                    name = self.piece_bitboards.piece_names[2*i +(0 if self.white_turn else 1)]
+                    if (piece:=
+                    self.piece_bitboards.__getattribute__(name))&move!=0:
+                        piece ^= move
+                        self.piece_bitboards.__setattr__(name, piece)
+                        break
+        
+        self.__setattr__("en_passants_list", self.en_passants_list[:-1])
+
+        
+        self.__setattr__("half_moves", self.half_moves -1)
+        if not self.white_turn:
+            self.__setattr__("full_moves", self.full_moves -1)
+
+                
+
+
+
+
+
+
+
+
     def _make_move(self, move: int):
         if move.bit_count()==1:
-
+            self.__setattr__("last_captured", self.last_captured.append(" "))
             if move==0b1000:
                 king = 0b10
                 rook = 0b100 | (self.piece_bitboards.w_rook & ~0b1)
@@ -595,9 +725,21 @@ class Game_state():
         elif move.bit_count()==3:
             promo = (move&0xF0000)
             actual_move= move & ~promo
-            for name in self.piece_bitboards.piece_names:
+
+            cap=False
+            for i in range(6):
+                name = self.piece_bitboards.piece_names[2*i if self.white_turn else 2*i+1]
                 piece = self.piece_bitboards.__getattribute__(name)
-                self.piece_bitboards.__setattr__(name, piece&~actual_move)
+                if piece & actual_move!=0:
+                    self.piece_bitboards.__setattr__(name, piece&~actual_move)
+                    self.__setattr__("last_captured",self.last_captured.append(name))
+                    cap=True
+                    break
+            if not cap:
+                self.__setattr__("last_captured",self.last_captured.append(" "))
+                
+            self.piece_bitboards.b_pawn &= ~actual_move
+            self.piece_bitboards.w_pawn &= ~actual_move
             if promo==0x10000:
                 queen = self.piece_bitboards.w_queen if self.white_turn else self.piece_bitboards.b_queen
                 self.piece_bitboards.__setattr__("w_queen" if self.white_turn else "b_queen",
@@ -615,31 +757,39 @@ class Game_state():
                 self.piece_bitboards.__setattr__("w_bishop" if self.white_turn else "b_bishop",
                                                 bishop | (actual_move & 0xFF00_0000_0000_00FF))
         else:
-            for i in range(6):
-                piece_opp = self.piece_bitboards.__getattribute__(self.piece_bitboards.piece_names[2*i +(1 if self.white_turn else 0)])
-                piece_opp = piece_opp & ~move
-                self.piece_bitboards.__setattr__(self.piece_bitboards.piece_names[2*i +(1 if self.white_turn else 0)], piece_opp)
+            for i in range(6): #captures
+                name = self.piece_bitboards.piece_names[2*i +(1 if self.white_turn else 0)]
+                if (piece:=
+                self.piece_bitboards.__getattribute__(name))&move!=0:
+                    piece &= ~move
+                    self.piece_bitboards.__setattr__(name, piece)
+                    self.__setattr__("last_captured",self.last_captured.append(name))
+                    break
 
-            for i in range(6):
+            for i in range(6): #non_captures
                 name = self.piece_bitboards.piece_names[2*i +(0 if self.white_turn else 1)]
                 if (piece:=
                 self.piece_bitboards.__getattribute__(name))&move!=0:
                     piece ^= move
                     self.piece_bitboards.__setattr__(name, piece)
+                    self.__setattr__("last_captured",self.last_captured.append(" "))
                     break
 
             if move&self.en_passants!=0:
                 name = "b_pawn" if self.white_turn else "w_pawn"
                 en_passant = (self.en_passants>>8) if self.white_turn else (self.en_passants<<8)
                 self.piece_bitboards.__setattr__(name, self.piece_bitboards.__getattribute__(name)&~en_passant)
+                self.__setattr__("last_captured",self.last_captured.append(f"{name}*"))
 
             self.__setattr__("en_passants", 0b0)
+            
 
 
             if name == "w_pawn" or name == "b_pawn":
                 if move&0xFF00FF00==move or move&0xFF00_FF00_0000_00==move:
                     en_passant_sqr = 0b1<<(move.bit_length()-9)
                     self.__setattr__("en_passants", en_passant_sqr)
+                    self.__setattr__("en_passants_list", self.en_passants_list.append(en_passant_sqr))
             elif name == "w_king":
                 self.__setattr__("castle_rights", self.castle_rights & ~(0b1100))
             elif name == ("b_king"):
@@ -654,6 +804,9 @@ class Game_state():
                     self.__setattr__("castle_rights", self.castle_rights & ~(0b10))
                 if self.piece_bitboards.b_rook&(0b1000_0000<<56)==0:
                     self.__setattr__("castle_rights", self.castle_rights & ~(0b1))
+            if self.en_passants==0:
+                self.__setattr__("en_passants_list", self.en_passants_list.append(0b0))
+
 
     def make_move(self, **kwargs)->bool:
         try:
@@ -704,9 +857,17 @@ class Game_state():
 
         return True
 
+ 
+
+
+
     def rev_bits(self, bit):  ## dont ask me how this works, but it reverses the bits
         bit = (bit * 0x0202020202 & 0x010884422010) % 1023
         return bit
+    
+    
+
+
 
 
 
@@ -855,6 +1016,8 @@ class Engine():
             return best, best_move
 
     def alpha_beta(self, game_state: Game_state, depth, alpha, beta):
+        global moves_searched
+        moves_searched = 1 + moves_searched
         game_state.piece_bitboards.update_bitboards()
         game_state.find_moves()
         move_eval = []
@@ -870,26 +1033,39 @@ class Engine():
         if game_state.white_turn:
             value = -float("inf")
             move = 0b0
+            game_state_time=0
+            value_calc_time=0
             for move in game_state.move_list:
-                new_game_state = game_state.copy()
+                t1me=time()
+                new_game_state = game_state.copy()      #this is 100x slower than other things :/, need to speed this up
+                t2me=time()
+                game_state_time += t2me-t1me
                 new_game_state.make_move(move=move)
                 eval = self.alpha_beta(new_game_state, depth-1, alpha, beta)
+                t3me=time()
                 move_eval.append(eval[0])
+                t4me=time()
+                value_calc_time+=t4me-t3me
                 del new_game_state
                 if eval[0] > 200:
                     value = eval[0]
                     best_move = move
                     if value >= beta:
-
+                        
                         break
                 elif eval[0]>value:
                     value = eval[0]
                     best_move = move
                     if value >= beta:
-
+                        
                         break
                 alpha = max(value, alpha)
+                
+                
+
             move_eval += [0]*(game_state.move_list.__len__() - move_eval.__len__())
+            print(f"game state eval time is {game_state_time}")
+            print(f"eval calc time is {value_calc_time}")
             return value, best_move, move_eval
 
         else:
@@ -920,23 +1096,26 @@ class Engine():
     def engine(self,game_state: Game_state):
         # eval = self.negamax(game_state, depth)
         t0 = time()
-        depth=3
+        depth=1
         while True:
             eval = self.alpha_beta(game_state, depth, -float("inf"), float("inf"))
             t1 = time()
-            if depth>=6:
+            if depth>=2:
                 break
-            elif t1-t0>=1:
-                # print(t1-t0)
-                # print(depth)
-                break
+            # elif t1-t0>=1:
+            #     # print(t1-t0)
+            #     # print(depth)
+            #     break
             else:
                 game_state.__setattr__("move_list",[move for y,move in sorted(zip(eval[-1], game_state.move_list))])
                 #print(eval[-1])
             depth+=1
         return eval
     def matrix_board(self, piece_bitboards: Piece_Bitboards)-> np.ndarray:
-        pawns = np.pad(np.array(list(str(bin(piece_bitboards.w_pawn))[2:]), dtype=int),(64-piece_bitboards.w_pawn.bit_length() ,0), mode = "constant", constant_values=0) - np.pad(np.array(list(str(bin(piece_bitboards.b_pawn))[2:]), dtype=int),(64-piece_bitboards.b_pawn.bit_length() ,0), mode = "constant", constant_values=0)
+        pawns = np.pad(np.array(list(str(bin(piece_bitboards.w_pawn))[2:]), dtype=int),(64-piece_bitboards.w_pawn.bit_length() ,0), 
+                       mode = "constant", constant_values=0) - np.pad(
+            np.array(list(str(bin(piece_bitboards.b_pawn))[2:]), dtype=int),
+            (64-piece_bitboards.b_pawn.bit_length() ,0), mode = "constant", constant_values=0)
         pawns = pawns.reshape([8,8])
         rooks = np.pad(np.array(list(str(bin(piece_bitboards.w_rook))[2:]), dtype=int),
                        (64 - piece_bitboards.w_rook.bit_length(), 0), mode="constant", constant_values=0) - np.pad(
@@ -973,6 +1152,8 @@ class Game():
         self.engine: Engine = Engine()
         self.game_state: Game_state = Game_state()
         self.grid_renderer: Grid_Renderer = Grid_Renderer()
+        self.seen_pos: list[str] =[]
+        
 
     def read_move_out(self, move: str):
         move_name = ""
@@ -1022,6 +1203,44 @@ class Game():
             pgn += " " + f"{self.game_state.num_to_alg(move_num)}"
 
         return pgn
+
+    def game_state_to_fen(self) -> str:
+        fen: str = ""
+        piece_bitboard_dict_list = {
+            "b_pawn": 'p',
+            "b_rook": 'r',
+            "b_knight": 'n',
+            "b_bishop": 'b',
+            "b_queen": 'q',
+            "b_king": 'k',
+            "w_pawn": 'P',
+            "w_rook": 'R',
+            "w_knight": 'N',
+            "w_bishop": 'B',
+            "w_queen": 'Q',
+            "w_king": 'K'
+        }
+        
+        bit_adder:int = 0b1000000000000000000000000000000000000000000000000000000000000000
+        
+        count = 0
+        for i in range(64):
+        
+            if self.game_state.piece_bitboards.total_bitboard & bit_adder != 0:
+                if count >0:
+
+                    fen += (count//8)*str(8) + str(count%8)
+                for name in self.game_state.piece_bitboards.piece_names:
+                    if bit_adder & self.game_state.piece_bitboards.__getattribute__(name)!=0:
+                        fen += piece_bitboard_dict_list[name]
+                        count=0
+                        break
+            else:
+                count+=1
+            bit_adder = bit_adder>>1
+
+
+        return fen
 
     def game_loop_pvp(self):
         fen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 0'
@@ -1136,8 +1355,8 @@ class Game():
                     game_going = False
                 else:
                     t1=time()
-
-
+                    global moves_searched
+                    moves_searched = 0
                     eval = self.engine.engine(game_state=self.game_state)
                     t2 = time()
 
@@ -1145,16 +1364,29 @@ class Game():
                     move = eval[1]
 
                     pgn = self.make_pgn(move,pgn)
-                    ta = time()
-                    matrix = self.engine.matrix_board(self.game_state.piece_bitboards)
-                    tb = time()
-                    print(tb-ta)
+                    # ta = time()
+                    # matrix = self.engine.matrix_board(self.game_state.piece_bitboards)
+                    # tb = time()
+                    # print(f"time for matrix is: {tb-ta}")
+                    print(f"time for engine search is {t[-1]}")
+                    print(f"moves searched = {moves_searched}")
+                    print(f"third root of moves searched {moves_searched**(1/3)}")
 
                     print(f"eval: {eval[0]}, move:{self.game_state.num_to_alg(move)}")
                     made_move = self.game_state.make_move(move=move)
                     if made_move:
                         # self.game_state.white_turn = not self.game_state.white_turn
                         self.grid_renderer.render_grid(self.game_state.piece_bitboards)
+                    pos_fen: str = self.game_state_to_fen()
+                    
+                    self.seen_pos.append(pos_fen) 
+                    print(self.seen_pos)
+                    
+                    if self.seen_pos.count(pos_fen)>=3:
+                        print("Draw by repition")
+                        game_going=False
+
+
         times = np.array(t)
         print(times.max())
         print(times.min())
@@ -1162,9 +1394,13 @@ class Game():
 
         print(pgn)
 
+        # with open("Save_file.txt", "w") as save_file:
+        #     save_file.write(pgn)
+        #     save_file.close()
+
 
 
 if __name__=="__main__":
     new_game = Game()
-    new_game.game_loop_eve()
+    new_game.game_loop_eve(max_moves=3)
 
